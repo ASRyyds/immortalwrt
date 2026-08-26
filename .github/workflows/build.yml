@@ -75,9 +75,7 @@ jobs:
       if: github.event.inputs.ssh == 'true'
       uses: mxschmitt/action-tmate@v3
       timeout-minutes: 30
-      with:
-        limit-access-to-actor: true
-
+    
     - name: 下载
       run: |
         make download -j$(nproc)
