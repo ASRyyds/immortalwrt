@@ -73,7 +73,7 @@ jobs:
 
     - name: SSH 连接
       if: github.event.inputs.ssh == 'true'
-      uses: csexton/debugger-action@master
+      uses: im-open/action-upterm@main
       timeout-minutes: 30
     
     - name: 下载
