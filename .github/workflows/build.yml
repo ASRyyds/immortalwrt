@@ -47,10 +47,13 @@ jobs:
           java-propose-classpath python3-pyelftools \
           xsltproc mkisofs
 
+    # ========== 修改 1：添加 OpenClash feeds ==========
     - name: 更新 Feeds
       run: |
+        echo "src-git openclash https://github.com/vernesong/OpenClash.git" >> feeds.conf.default
         ./scripts/feeds update -a
         ./scripts/feeds install -a
+        ./scripts/feeds install -f -p openclash luci-app-openclash
 
     - name: 缓存
       uses: actions/cache@v4
@@ -62,14 +65,20 @@ jobs:
         restore-keys: |
           ${{ runner.os }}-iwrt25-
 
+    # ========== 修改 2：自动选中 OpenClash ==========
     - name: 加载配置或生成默认
       run: |
         if [ -f "config/.config" ]; then
           cp config/.config .config
-          make defconfig
         else
-          make defconfig
+          touch .config
         fi
+        echo "CONFIG_PACKAGE_luci-app-openclash=y" >> .config
+        # 可选：追加几个 OpenClash 常用依赖（如果固件空间够建议保留）
+        # echo "CONFIG_PACKAGE_coreutils-nohup=y" >> .config
+        # echo "CONFIG_PACKAGE_bash=y" >> .config
+        # echo "CONFIG_PACKAGE_curl=y" >> .config
+        make defconfig
 
     - name: SSH 连接
       if: github.event.inputs.ssh == 'true'
