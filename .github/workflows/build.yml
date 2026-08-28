@@ -47,13 +47,17 @@ jobs:
           java-propose-classpath python3-pyelftools \
           xsltproc mkisofs
 
-    # ========== 修改 1：添加 OpenClash feeds ==========
+    # ========== 添加第三方 Feeds ==========
     - name: 更新 Feeds
       run: |
         echo "src-git openclash https://github.com/vernesong/OpenClash.git" >> feeds.conf.default
+        echo "src-git turboacc https://github.com/chenmozhijin/luci-app-turboacc.git" >> feeds.conf.default
+        echo "src-git smartdns https://github.com/pymumu/luci-app-smartdns.git" >> feeds.conf.default
         ./scripts/feeds update -a
         ./scripts/feeds install -a
         ./scripts/feeds install -f -p openclash luci-app-openclash
+        ./scripts/feeds install -f -p turboacc luci-app-turboacc
+        ./scripts/feeds install -f -p smartdns luci-app-smartdns
 
     - name: 缓存
       uses: actions/cache@v4
@@ -65,7 +69,7 @@ jobs:
         restore-keys: |
           ${{ runner.os }}-iwrt25-
 
-    # ========== 修改 2：自动选中 OpenClash ==========
+    # ========== 自动选中插件 ==========
     - name: 加载配置或生成默认
       run: |
         if [ -f "config/.config" ]; then
@@ -74,10 +78,8 @@ jobs:
           touch .config
         fi
         echo "CONFIG_PACKAGE_luci-app-openclash=y" >> .config
-        # 可选：追加几个 OpenClash 常用依赖（如果固件空间够建议保留）
-        # echo "CONFIG_PACKAGE_coreutils-nohup=y" >> .config
-        # echo "CONFIG_PACKAGE_bash=y" >> .config
-        # echo "CONFIG_PACKAGE_curl=y" >> .config
+        echo "CONFIG_PACKAGE_luci-app-turboacc=y" >> .config
+        echo "CONFIG_PACKAGE_luci-app-smartdns=y" >> .config
         make defconfig
 
     - name: SSH 连接
