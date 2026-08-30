@@ -50,14 +50,13 @@ jobs:
     # ========== 添加第三方 Feeds ==========
     - name: 更新 Feeds
       run: |
-        echo "src-git openclash https://github.com/vernesong/OpenClash.git" >> feeds.conf.default
         echo "src-git turboacc https://github.com/chenmozhijin/luci-app-turboacc.git" >> feeds.conf.default
-        echo "src-git smartdns https://github.com/pymumu/luci-app-smartdns.git" >> feeds.conf.default
+        echo "src-git mosdns https://github.com/sbwml/luci-app-mosdns.git" >> feeds.conf.default
         ./scripts/feeds update -a
         ./scripts/feeds install -a
-        ./scripts/feeds install -f -p openclash luci-app-openclash
         ./scripts/feeds install -f -p turboacc luci-app-turboacc
-        ./scripts/feeds install -f -p smartdns luci-app-smartdns
+        ./scripts/feeds install -f -p mosdns mosdns
+        ./scripts/feeds install -f -p mosdns luci-app-mosdns
 
     - name: 缓存
       uses: actions/cache@v4
@@ -70,16 +69,23 @@ jobs:
           ${{ runner.os }}-iwrt25-
 
     # ========== 自动选中插件 ==========
-    - name: 加载配置或生成默认
+    - name: 加载配置
       run: |
         if [ -f "config/.config" ]; then
           cp config/.config .config
         else
           touch .config
         fi
-        echo "CONFIG_PACKAGE_luci-app-openclash=y" >> .config
         echo "CONFIG_PACKAGE_luci-app-turboacc=y" >> .config
-        echo "CONFIG_PACKAGE_luci-app-smartdns=y" >> .config
+        echo "CONFIG_PACKAGE_luci-app-mosdns=y" >> .config
+        # 禁用 turboacc 的 SFE/FULLCONE（内核模块不存在，避免警告）
+        echo "# CONFIG_PACKAGE_luci-app-turboacc_INCLUDE_SHORTCUT_FE is not set" >> .config
+        echo "# CONFIG_PACKAGE_luci-app-turboacc_INCLUDE_SHORTCUT_FE_CM is not set" >> .config
+        echo "# CONFIG_PACKAGE_luci-app-turboacc_INCLUDE_SHORTCUT_FE_DRV is not set" >> .config
+        echo "# CONFIG_PACKAGE_luci-app-turboacc_INCLUDE_FULLCONE_NAT is not set" >> .config
+        # 只保留 Flow Offload + BBR
+        echo "CONFIG_PACKAGE_luci-app-turboacc_INCLUDE_OFFLOADING=y" >> .config
+        echo "CONFIG_PACKAGE_luci-app-turboacc_INCLUDE_BBR_CCA=y" >> .config
         make defconfig
 
     - name: SSH 连接
