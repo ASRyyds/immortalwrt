@@ -45,17 +45,20 @@ jobs:
           python3-pkg-resources swig rsync unzip zlib1g-dev \
           file wget libelf-dev libtool-bin ecj fastjar \
           java-propose-classpath python3-pyelftools \
-          xsltproc mkisofs
+          xsltproc mkisofs protobuf-compiler
 
-    # ========== 添加第三方 Feeds ==========
+    # ========== 修正：Feeds 安装顺序 ==========
     - name: 更新 Feeds
       run: |
         echo "src-git turboacc https://github.com/chenmozhijin/luci-app-turboacc.git" >> feeds.conf.default
         echo "src-git mosdns https://github.com/sbwml/luci-app-mosdns.git" >> feeds.conf.default
         ./scripts/feeds update -a
         ./scripts/feeds install -a
+        # turboacc
         ./scripts/feeds install -f -p turboacc luci-app-turboacc
+        # mosdns：必须先装本体和 v2dat，再装界面！
         ./scripts/feeds install -f -p mosdns mosdns
+        ./scripts/feeds install -f -p mosdns v2dat
         ./scripts/feeds install -f -p mosdns luci-app-mosdns
 
     - name: 缓存
@@ -68,7 +71,7 @@ jobs:
         restore-keys: |
           ${{ runner.os }}-iwrt25-
 
-    # ========== 自动选中插件 ==========
+    # ========== 修正：显式选中 mosdns 本体 + v2dat ==========
     - name: 加载配置
       run: |
         if [ -f "config/.config" ]; then
@@ -77,13 +80,15 @@ jobs:
           touch .config
         fi
         echo "CONFIG_PACKAGE_luci-app-turboacc=y" >> .config
+        # MosDNS 本体 + 界面 + v2dat 必须同时选中
+        echo "CONFIG_PACKAGE_mosdns=y" >> .config
+        echo "CONFIG_PACKAGE_v2dat=y" >> .config
         echo "CONFIG_PACKAGE_luci-app-mosdns=y" >> .config
-        # 禁用 turboacc 的 SFE/FULLCONE（内核模块不存在，避免警告）
+        # turboacc 禁用 SFE
         echo "# CONFIG_PACKAGE_luci-app-turboacc_INCLUDE_SHORTCUT_FE is not set" >> .config
         echo "# CONFIG_PACKAGE_luci-app-turboacc_INCLUDE_SHORTCUT_FE_CM is not set" >> .config
         echo "# CONFIG_PACKAGE_luci-app-turboacc_INCLUDE_SHORTCUT_FE_DRV is not set" >> .config
         echo "# CONFIG_PACKAGE_luci-app-turboacc_INCLUDE_FULLCONE_NAT is not set" >> .config
-        # 只保留 Flow Offload + BBR
         echo "CONFIG_PACKAGE_luci-app-turboacc_INCLUDE_OFFLOADING=y" >> .config
         echo "CONFIG_PACKAGE_luci-app-turboacc_INCLUDE_BBR_CCA=y" >> .config
         make defconfig
