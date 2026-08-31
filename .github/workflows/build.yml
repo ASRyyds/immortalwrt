@@ -52,12 +52,9 @@ jobs:
       run: |
         git checkout -- feeds.conf.default
         echo "src-git turboacc https://github.com/chenmozhijin/luci-app-turboacc.git" >> feeds.conf.default
-        echo "src-git mosdns https://github.com/sbwml/luci-app-mosdns.git" >> feeds.conf.default
+        echo "src-git small https://github.com/kenzok8/small" >> feeds.conf.default
         ./scripts/feeds update -a
-        # 安装所有 feeds 中的包（官方+自定义），确保完整依赖
         ./scripts/feeds install -a
-
-    # 移除缓存，每次干净构建
 
     - name: 加载配置或生成默认
       run: |
@@ -82,7 +79,7 @@ jobs:
 
     - name: 编译
       run: |
-        make -j1 V=s 2>&1 | tee build.log
+        make -j$(nproc) 2>&1 | tee build.log
         if [ ${PIPESTATUS[0]} -ne 0 ]; then
           echo "========== 编译失败，最后 50 行日志 =========="
           tail -n 50 build.log
