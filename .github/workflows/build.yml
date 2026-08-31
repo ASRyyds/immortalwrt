@@ -52,12 +52,10 @@ jobs:
     # =====================================================
     - name: 更新 Feeds
       run: |
-        # 清空 feeds 配置，避免重复
         > feeds.conf.default
         echo "src-git turboacc https://github.com/chenmozhijin/luci-app-turboacc.git" >> feeds.conf.default
         echo "src-git mosdns https://github.com/sbwml/luci-app-mosdns.git" >> feeds.conf.default
         ./scripts/feeds update -a
-
         # 只安装我们明确需要的包，绝不使用 install -a
         ./scripts/feeds install luci-app-turboacc
         ./scripts/feeds install luci-app-mosdns
@@ -79,42 +77,65 @@ jobs:
       run: |
         # 删除界面包中的启动脚本，仅保留 mosdns 本体提供的
         find package/feeds/mosdns/luci-app-mosdns -type f -path "*/init.d/mosdns" -exec rm -f {} \;
-        # 同时删除可能存在的目录，确保彻底
+        # 删除空目录
         find package/feeds/mosdns/luci-app-mosdns -type d -path "*/init.d" -empty -delete 2>/dev/null || true
 
     # =====================================================
-    # 3. 生成 .config（只选界面，依赖自动拉取 mosdns）
+    # 3. 加载配置（保留原有配置，只调整 mosdns 相关项）
     # =====================================================
     - name: 加载配置
       run: |
-        # 彻底清除旧配置
-        rm -f .config
-        touch .config
+        # 如果有预设配置则复制，否则创建空文件
+        if [ -f "config/.config" ]; then
+          cp config/.config .config
+        else
+          touch .config
+        fi
 
-        # 启用 turboacc
-        echo "CONFIG_PACKAGE_luci-app-turboacc=y" >> .config
-        # 启用 mosdns 界面（其依赖会自动选中 mosdns 本体）
-        echo "CONFIG_PACKAGE_luci-app-mosdns=y" >> .config
+        # 修改 mosdns 相关选项：确保界面启用，本体由依赖自动拉取，但避免显式选中冲突
+        # 使用 sed 修改现有配置项，如果不存在则追加
+        # 1) 确保 CONFIG_PACKAGE_luci-app-mosdns=y
+        if grep -q "^CONFIG_PACKAGE_luci-app-mosdns=" .config; then
+          sed -i 's/^CONFIG_PACKAGE_luci-app-mosdns=.*/CONFIG_PACKAGE_luci-app-mosdns=y/' .config
+        else
+          echo "CONFIG_PACKAGE_luci-app-mosdns=y" >> .config
+        fi
 
-        # turboacc 的细项配置（维持原样）
-        echo "# CONFIG_PACKAGE_luci-app-turboacc_INCLUDE_SHORTCUT_FE is not set" >> .config
-        echo "# CONFIG_PACKAGE_luci-app-turboacc_INCLUDE_SHORTCUT_FE_CM is not set" >> .config
-        echo "# CONFIG_PACKAGE_luci-app-turboacc_INCLUDE_SHORTCUT_FE_DRV is not set" >> .config
-        echo "# CONFIG_PACKAGE_luci-app-turboacc_INCLUDE_FULLCONE_NAT is not set" >> .config
-        echo "CONFIG_PACKAGE_luci-app-turboacc_INCLUDE_OFFLOADING=y" >> .config
-        echo "CONFIG_PACKAGE_luci-app-turboacc_INCLUDE_BBR_CCA=y" >> .config
+        # 2) 取消独立 mosdns 包（如果存在则注释掉，否则追加注释）
+        if grep -q "^CONFIG_PACKAGE_mosdns=" .config; then
+          sed -i 's/^CONFIG_PACKAGE_mosdns=.*/# CONFIG_PACKAGE_mosdns is not set/' .config
+        else
+          echo "# CONFIG_PACKAGE_mosdns is not set" >> .config
+        fi
 
-        # 关键：不要手动设置 CONFIG_PACKAGE_mosdns 或 v2dat，让依赖自动处理
-        # 但为了保险，明确取消可能冲突的独立选项（如果它们已被默认选中，这里会覆盖）
-        echo "# CONFIG_PACKAGE_mosdns is not set" >> .config
-        echo "# CONFIG_PACKAGE_v2dat is not set" >> .config
+        # 3) 同样处理 v2dat（可选）
+        if grep -q "^CONFIG_PACKAGE_v2dat=" .config; then
+          sed -i 's/^CONFIG_PACKAGE_v2dat=.*/# CONFIG_PACKAGE_v2dat is not set/' .config
+        else
+          echo "# CONFIG_PACKAGE_v2dat is not set" >> .config
+        fi
 
+        # 4) 确保 turboacc 配置（如果原有有，则不覆盖，只补充缺失的）
+        # 先检查是否存在，若不存在则追加（但原有的应该保留）
+        grep -q "^CONFIG_PACKAGE_luci-app-turboacc=" .config || echo "CONFIG_PACKAGE_luci-app-turboacc=y" >> .config
+        # 以下细化选项，如果不存在则追加（但不要覆盖原有）
+        grep -q "^CONFIG_PACKAGE_luci-app-turboacc_INCLUDE_OFFLOADING=" .config || echo "CONFIG_PACKAGE_luci-app-turboacc_INCLUDE_OFFLOADING=y" >> .config
+        grep -q "^CONFIG_PACKAGE_luci-app-turboacc_INCLUDE_BBR_CCA=" .config || echo "CONFIG_PACKAGE_luci-app-turboacc_INCLUDE_BBR_CCA=y" >> .config
+        # 禁用 SFE 等（如果存在则改为注释，不存在则追加注释）
+        for opt in SHORTCUT_FE SHORTCUT_FE_CM SHORTCUT_FE_DRV FULLCONE_NAT; do
+          if grep -q "^CONFIG_PACKAGE_luci-app-turboacc_INCLUDE_${opt}=" .config; then
+            sed -i "s/^CONFIG_PACKAGE_luci-app-turboacc_INCLUDE_${opt}=.*/# CONFIG_PACKAGE_luci-app-turboacc_INCLUDE_${opt} is not set/" .config
+          else
+            echo "# CONFIG_PACKAGE_luci-app-turboacc_INCLUDE_${opt} is not set" >> .config
+          fi
+        done
+
+        # 运行 defconfig 自动处理依赖（保留所有用户配置，只修正依赖）
         make defconfig
 
-        # 验证：确保 mosdns 仍被依赖选中（但不应该出现两个包冲突）
-        echo "===== 检查最终配置 ====="
-        grep "CONFIG_PACKAGE_mosdns" .config || true
-        grep "CONFIG_PACKAGE_luci-app-mosdns" .config || true
+        # 打印确认信息
+        echo "===== 最终 mosdns 相关配置 ====="
+        grep -E "CONFIG_PACKAGE_(mosdns|luci-app-mosdns|v2dat)" .config || true
 
     - name: SSH 连接（调试用）
       if: github.event.inputs.ssh == 'true'
