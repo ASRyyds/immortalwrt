@@ -78,13 +78,7 @@ jobs:
         find dl -size -1024c -exec rm -f {} \;
 
     - name: 编译
-      run: |
-        make -j$(nproc) 2>&1 | tee build.log
-        if [ ${PIPESTATUS[0]} -ne 0 ]; then
-          echo "========== 编译失败，最后 50 行日志 =========="
-          tail -n 50 build.log
-          exit 1
-        fi
+      run: make -j$(nproc) V=s
 
     - name: 整理输出
       run: |
