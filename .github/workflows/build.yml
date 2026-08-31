@@ -48,17 +48,17 @@ jobs:
           xsltproc mkisofs protobuf-compiler \
           golang-go
 
-    - name: 恢复原始 feeds 配置并追加自定义源
+    - name: 恢复原始 feeds 并追加自定义源
       run: |
         git checkout -- feeds.conf.default
         echo "src-git turboacc https://github.com/chenmozhijin/luci-app-turboacc.git" >> feeds.conf.default
         echo "src-git mosdns https://github.com/sbwml/luci-app-mosdns.git" >> feeds.conf.default
         ./scripts/feeds update -a
-        ./scripts/feeds install luci-app-turboacc luci-app-mosdns
+        # 安装所有 feeds 中的包（官方+自定义），确保完整依赖
+        ./scripts/feeds install -a
 
-    # ========== 已移除缓存，每次干净构建 ==========
+    # 移除缓存，每次干净构建
 
-    # ========== 按您要求替换的加载配置步骤 ==========
     - name: 加载配置或生成默认
       run: |
         if [ -f "config/.config" ]; then
